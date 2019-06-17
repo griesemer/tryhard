@@ -110,13 +110,23 @@ func rewriteAssign(s ast.Stmt) ast.Stmt {
 	a := s.(*ast.AssignStmt)
 	lhs := a.Lhs[:len(a.Lhs)-1]
 	rhs0 := &ast.CallExpr{Fun: &ast.Ident{Name: "try"}, Args: []ast.Expr{a.Rhs[0]}}
-	if len(lhs) == 0 {
+	if isBlanks(lhs) {
 		// no lhs anymore - no need for assignment
 		return &ast.ExprStmt{X: rhs0}
 	}
 	a.Lhs = lhs
 	a.Rhs[0] = rhs0
 	return a
+}
+
+// isBlanks reports whether list is empty or contains only blank identifiers.
+func isBlanks(list []ast.Expr) bool {
+	for _, x := range list {
+		if x, ok := x.(*ast.Ident); !ok || x.Name != "_" {
+			return false
+		}
+	}
+	return true
 }
 
 // asErrAssign reports whether s is an assignment statement of the form:
