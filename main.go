@@ -30,9 +30,8 @@
 // (a zero number literal, an empty string, an empty composite literal, etc.).
 // The last result must be the identifier `err`.
 //
-// Caution: If the rewrite flag (-r) is specified, the file is updated in place!
-// No attempt is made to correct line numbers; rewrites tend to introduce empty
-// lines where `if` statements are replaced by `try`.
+// CAUTION: If the rewrite flag (-r) is specified, the file is updated in place!
+//          Make sure you can revert to the original.
 //
 // Function literals (closures) are currently ignored.
 //

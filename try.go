@@ -64,7 +64,7 @@ func tryBlock(b *ast.BlockStmt) bool {
 						listPos(count, p)
 					}
 					if *rewrite {
-						b.List[i-1] = rewriteAssign(p)
+						b.List[i-1] = rewriteAssign(p, s.End())
 						b.List[i] = nil // remove `if`
 						dirty = true
 					}
@@ -74,7 +74,7 @@ func tryBlock(b *ast.BlockStmt) bool {
 						listPos(count, s)
 					}
 					if *rewrite {
-						b.List[i] = rewriteAssign(s.Init)
+						b.List[i] = rewriteAssign(s.Init, s.End())
 						dirty = true
 					}
 				}
@@ -106,10 +106,12 @@ func listPos(n int, s ast.Stmt) {
 // rewriteAssign assumes that s is an assignment that is a potential candidate
 // for `try` and rewrites it accordingly. It returns the new assignment (or the
 // assignment's rhs if there's no lhs anymore).
-func rewriteAssign(s ast.Stmt) ast.Stmt {
+func rewriteAssign(s ast.Stmt, end token.Pos) ast.Stmt {
 	a := s.(*ast.AssignStmt)
 	lhs := a.Lhs[:len(a.Lhs)-1]
-	rhs0 := &ast.CallExpr{Fun: &ast.Ident{Name: "try"}, Args: []ast.Expr{a.Rhs[0]}}
+	rhs := a.Rhs[0]
+	pos := rhs.Pos()
+	rhs0 := &ast.CallExpr{Fun: &ast.Ident{NamePos: pos, Name: "try"}, Lparen: pos, Args: []ast.Expr{a.Rhs[0]}, Rparen: end}
 	if isBlanks(lhs) {
 		// no lhs anymore - no need for assignment
 		return &ast.ExprStmt{X: rhs0}
