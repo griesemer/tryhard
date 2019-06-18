@@ -56,6 +56,26 @@ func tryBlock(b *ast.BlockStmt) bool {
 			if tryBlock(s) {
 				dirty = true
 			}
+		case *ast.ForStmt:
+			if tryBlock(s.Body) {
+				dirty = true
+			}
+		case *ast.RangeStmt:
+			if tryBlock(s.Body) {
+				dirty = true
+			}
+		case *ast.SelectStmt:
+			if tryBlock(s.Body) {
+				dirty = true
+			}
+		case *ast.SwitchStmt:
+			if tryBlock(s.Body) {
+				dirty = true
+			}
+		case *ast.TypeSwitchStmt:
+			if tryBlock(s.Body) {
+				dirty = true
+			}
 		case *ast.IfStmt:
 			if isErrTest(s.Cond) && isErrReturn(s.Body) {
 				if s.Init == nil && isErrAssign(p) {
