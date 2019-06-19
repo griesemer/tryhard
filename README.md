@@ -26,12 +26,12 @@ if <err> != nil {
 ```
 
 or an `if` statement with an init expression matching the above assignment. The
-error variable <err> must be called "err", unless specified otherwise with the
+error variable `<err>` must be called `err`, unless specified otherwise with the
 -err flag; the variable may or may not be of type `error` or correspond to the
 result error. The return statement must contain one or more return expressions,
 with all but the last one denoting a zero value of sorts (a zero number literal,
 an empty string, an empty composite literal, etc.). The last result must be the
-variable <err>.
+variable `<err>`.
 
 **CAUTION**: If the rewrite flag (-r) is specified, the file is updated in place!
          Make sure you can revert to the original.
