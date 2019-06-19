@@ -66,6 +66,7 @@ var (
 	// main operation modes
 	list    = flag.Bool("l", false, "list positions of potential `try` candidate statements")
 	rewrite = flag.Bool("r", false, "rewrite potential `try` candidate statements to use `try`")
+	all     = flag.Bool("a", false, "also search check directories named `vendor` and `.git`")
 )
 
 var (
@@ -161,7 +162,14 @@ func processFile(filename string) error {
 }
 
 func visitFile(path string, f os.FileInfo, err error) error {
-	if err == nil && isGoFile(f) {
+	// If not -a is given, skip vendor/ and .git/ directories
+	if !*all && err == nil && f.IsDir() {
+		switch filepath.Base(path) {
+		case "vendor", ".git":
+			// Skip this directory, and all contents within it
+			return filepath.SkipDir
+		}
+	} else if err == nil && isGoFile(f) {
 		err = processFile(path)
 	}
 	// Don't complain if a file was deleted in the meantime (i.e.
