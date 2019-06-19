@@ -46,7 +46,7 @@ func tryBlock(b *ast.BlockStmt, modified *bool) {
 			tryBlock(s.Body, modified)
 		case *ast.IfStmt:
 			errname := *varname
-			if isErrTest(s.Cond, &errname) && isErrReturn(s.Body, errname) {
+			if isErrTest(s.Cond, &errname) && isErrReturn(s.Body, errname) && s.Else == nil {
 				if s.Init == nil && isErrAssign(p, errname) {
 					count++
 					if *list {
