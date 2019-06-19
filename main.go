@@ -15,20 +15,21 @@
 // which may or may not be the predefined type `error`. Inside these functions tryhard
 // considers assignments of the form
 //
-//	v1, v2, ..., vn, err = f() // can also be :=
+//	v1, v2, ..., vn, <err> = f() // can also be := instead of =
 //
 // followed by an `if` statement of the form
 //
-//	if err != nil {
-//		return ..., err
+//	if <err> != nil {
+//		return ..., <err>
 //	}
 //
-// or `if` statements with an init expression matching the above assignment. The
-// error variable must be called `err`, which may or may not be of type `error` or
-// correspond to the result error. The return statement must contain one or more
-// return expressions, with all but the last one denoting a zero value of sorts
-// (a zero number literal, an empty string, an empty composite literal, etc.).
-// The last result must be the identifier `err`.
+// or an `if` statement with an init expression matching the above assignment. The
+// error variable <err> must be called "err", unless specified otherwise with the
+// -err flag; the variable may or may not be of type `error` or correspond to the
+// result error. The return statement must contain one or more return expressions,
+// with all but the last one denoting a zero value of sorts (a zero number literal,
+// an empty string, an empty composite literal, etc.). The last result must be the
+// variable <err>.
 //
 // CAUTION: If the rewrite flag (-r) is specified, the file is updated in place!
 //          Make sure you can revert to the original.
@@ -43,6 +44,8 @@
 //		list positions of potential `try` candidate statements
 //	-r
 //		rewrite potential `try` candidate statements to use `try`
+//	-err
+//		name of error variable; using "" permits any name
 //
 // If no -l is provided, tryhard reports the number of potential candidates found.
 package main
@@ -66,6 +69,9 @@ var (
 	// main operation modes
 	list    = flag.Bool("l", false, "list positions of potential `try` candidate statements")
 	rewrite = flag.Bool("r", false, "rewrite potential `try` candidate statements to use `try`")
+
+	// customization
+	varname = flag.String("err", "err", `name of error variable; using "" permits any name`)
 )
 
 var (
@@ -137,7 +143,9 @@ func processFile(filename string) error {
 		return err
 	}
 
-	if !tryFile(file) || !*rewrite {
+	modified := false
+	tryFile(file, &modified)
+	if !modified || !*rewrite {
 		return nil
 	}
 

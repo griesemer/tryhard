@@ -14,71 +14,40 @@ import (
 var count int // global count of all `try` candidates
 
 // tryFile identifies statements in f that are potential candidates for `try`,
-// lists their positions (-l flag), or rewrites them in place using `try` (-r flag).
-// tryFile reports whether the block was rewritten.
-//
-// Candiates satisfy the following requirements:
-// - If the statement is an assignment, it is followed by an `if` statement:
-//
-//	v1, v2, ..., vn, err = f() // can also be :=
-//	if err != nil {
-//		return ..., err
-//	}
-//
-// - If the statement is an `if` statement, it is of the form:
-//
-//	if v1, v2, ..., vn, err = f(); err != nil { // can also be :=
-//		return ..., err
-//
-// In both cases, the `return` returns zero values followed by `err`.
-// Local function closures are ignored at the moment.
-func tryFile(f *ast.File) bool {
-	dirty := false
+// lists their positions (-l flag), or rewrites them in place using `try` (-r flag)
+// and sets *modified to true.
+func tryFile(f *ast.File, modified *bool) {
 	for _, d := range f.Decls {
 		if f, ok := d.(*ast.FuncDecl); ok {
 			if hasErrorResult(f.Type) && f.Body != nil {
-				if tryBlock(f.Body) {
-					dirty = true
-				}
+				tryBlock(f.Body, modified)
 			}
 		}
 	}
-	return dirty
 }
 
 // tryBlock is like tryFile but operates on a block b.
-func tryBlock(b *ast.BlockStmt) bool {
-	dirty := false
+func tryBlock(b *ast.BlockStmt, modified *bool) {
+	dirty := false // if set, b.List contains nil entries
 	var p ast.Stmt // previous statement
 	for i, s := range b.List {
 		switch s := s.(type) {
 		case *ast.BlockStmt:
-			if tryBlock(s) {
-				dirty = true
-			}
+			tryBlock(s, modified)
 		case *ast.ForStmt:
-			if tryBlock(s.Body) {
-				dirty = true
-			}
+			tryBlock(s.Body, modified)
 		case *ast.RangeStmt:
-			if tryBlock(s.Body) {
-				dirty = true
-			}
+			tryBlock(s.Body, modified)
 		case *ast.SelectStmt:
-			if tryBlock(s.Body) {
-				dirty = true
-			}
+			tryBlock(s.Body, modified)
 		case *ast.SwitchStmt:
-			if tryBlock(s.Body) {
-				dirty = true
-			}
+			tryBlock(s.Body, modified)
 		case *ast.TypeSwitchStmt:
-			if tryBlock(s.Body) {
-				dirty = true
-			}
+			tryBlock(s.Body, modified)
 		case *ast.IfStmt:
-			if isErrTest(s.Cond) && isErrReturn(s.Body) {
-				if s.Init == nil && isErrAssign(p) {
+			errname := *varname
+			if isErrTest(s.Cond, &errname) && isErrReturn(s.Body, errname) {
+				if s.Init == nil && isErrAssign(p, errname) {
 					count++
 					if *list {
 						listPos(count, p)
@@ -87,15 +56,16 @@ func tryBlock(b *ast.BlockStmt) bool {
 						b.List[i-1] = rewriteAssign(p, s.End())
 						b.List[i] = nil // remove `if`
 						dirty = true
+						*modified = true
 					}
-				} else if isErrAssign(s.Init) {
+				} else if isErrAssign(s.Init, errname) {
 					count++
 					if *list {
 						listPos(count, s)
 					}
 					if *rewrite {
 						b.List[i] = rewriteAssign(s.Init, s.End())
-						dirty = true
+						*modified = true
 					}
 				}
 			}
@@ -113,8 +83,6 @@ func tryBlock(b *ast.BlockStmt) bool {
 		}
 		b.List = b.List[:i]
 	}
-
-	return dirty
 }
 
 // listPos prints the position of statement s, numbered by n.
@@ -153,17 +121,17 @@ func isBlanks(list []ast.Expr) bool {
 
 // asErrAssign reports whether s is an assignment statement of the form:
 //
-//      v1, v2, ... vn, err  = f()
-//      v1, v2, ... vn, err := f()
+//      v1, v2, ... vn, <err>  = f()
+//      v1, v2, ... vn, <err> := f()
 //
 // where the vi are arbitrary expressions or variables (n may also be 0),
-// err is the identifier "err", and f() stands for a function call.
-func isErrAssign(s ast.Stmt) bool {
+// <err> is the variable errname, and f() stands for a function call.
+func isErrAssign(s ast.Stmt, errname string) bool {
 	a, ok := s.(*ast.AssignStmt)
 	if !ok || a.Tok != token.ASSIGN && a.Tok != token.DEFINE {
 		return false
 	}
-	return len(a.Lhs) > 0 && isName(a.Lhs[len(a.Lhs)-1], "err") && len(a.Rhs) == 1 && isCall(a.Rhs[0])
+	return len(a.Lhs) > 0 && isName(a.Lhs[len(a.Lhs)-1], errname) && len(a.Rhs) == 1 && isCall(a.Rhs[0])
 }
 
 // isCall reports whether x is a (function) call.
@@ -173,16 +141,28 @@ func isCall(x ast.Expr) bool {
 	return ok
 }
 
-// isErrTest reports whether x is a the binary operation "err != nil".
-func isErrTest(x ast.Expr) bool {
+// isErrTest reports whether x is a the binary operation "<err> != nil",
+// where <err> stands for the name of the error variable. If *errname is
+// the empty string, <err> may have any name, and *errname is set to it.
+// Otherwise, <err> must be *errname.
+func isErrTest(x ast.Expr, errname *string) bool {
 	c, ok := x.(*ast.BinaryExpr)
-	return ok && c.Op == token.NEQ && isName(c.X, "err") && isName(c.Y, "nil")
+	if ok && c.Op == token.NEQ && isName(c.Y, "nil") {
+		if errv, ok := c.X.(*ast.Ident); ok {
+			if *errname == "" {
+				*errname = errv.Name
+				return true
+			}
+			return errv.Name == *errname
+		}
+	}
+	return false
 }
 
 // isErrReturn reports whether b contains a single return statement
 // that is either empty, or reports all zero values followed by a final
-// value called "err".
-func isErrReturn(b *ast.BlockStmt) bool {
+// variable called errname.
+func isErrReturn(b *ast.BlockStmt, errname string) bool {
 	if len(b.List) != 1 {
 		return false
 	}
@@ -196,7 +176,7 @@ func isErrReturn(b *ast.BlockStmt) bool {
 				return false
 			}
 		} else {
-			if !isName(x, "err") {
+			if !isName(x, errname) {
 				return false
 			}
 		}
@@ -245,7 +225,7 @@ func isZero(x ast.Expr) bool {
 	return false
 }
 
-// isName reports whether x is an identifier with the given name
+// isName reports whether x is an identifier with the given name.
 func isName(x ast.Expr, name string) bool {
 	id, ok := x.(*ast.Ident)
 	return ok && id.Name == name
