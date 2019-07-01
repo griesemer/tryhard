@@ -45,6 +45,11 @@ func tryBlock(b *ast.BlockStmt, modified *bool) {
 		case *ast.TypeSwitchStmt:
 			tryBlock(s.Body, modified)
 		case *ast.IfStmt:
+			tryBlock(s.Body, modified)
+			if s, ok := s.Else.(*ast.BlockStmt); ok {
+				tryBlock(s, modified)
+			}
+
 			errname := *varname
 			if isErrTest(s.Cond, &errname) && isErrReturn(s.Body, errname) && s.Else == nil {
 				if s.Init == nil && isErrAssign(p, errname) {
@@ -69,6 +74,7 @@ func tryBlock(b *ast.BlockStmt, modified *bool) {
 					}
 				}
 			}
+
 		}
 		p = s
 	}
