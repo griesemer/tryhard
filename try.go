@@ -5,13 +5,10 @@
 package main
 
 import (
-	"fmt"
 	"go/ast"
 	"go/token"
 	"strconv"
 )
-
-var count int // global count of all `try` candidates
 
 // tryFile identifies statements in f that are potential candidates for `try`,
 // lists their positions (-l flag), or rewrites them in place using `try` (-r flag)
@@ -19,7 +16,9 @@ var count int // global count of all `try` candidates
 func tryFile(f *ast.File, modified *bool) {
 	for _, d := range f.Decls {
 		if f, ok := d.(*ast.FuncDecl); ok {
+			count(Func, f)
 			if hasErrorResult(f.Type) && f.Body != nil {
+				count(FuncError, f)
 				tryBlock(f.Body, modified)
 			}
 		}
@@ -31,6 +30,7 @@ func tryBlock(b *ast.BlockStmt, modified *bool) {
 	dirty := false // if set, b.List contains nil entries
 	var p ast.Stmt // previous statement
 	for i, s := range b.List {
+		count(Stmt, s)
 		switch s := s.(type) {
 		case *ast.BlockStmt:
 			tryBlock(s, modified)
@@ -45,36 +45,53 @@ func tryBlock(b *ast.BlockStmt, modified *bool) {
 		case *ast.TypeSwitchStmt:
 			tryBlock(s.Body, modified)
 		case *ast.IfStmt:
+			count(If, s)
 			tryBlock(s.Body, modified)
 			if s, ok := s.Else.(*ast.BlockStmt); ok {
 				tryBlock(s, modified)
 			}
 
+			// condition must be of the form: <errname> != nil
 			errname := *varname
-			if isErrTest(s.Cond, &errname) && isErrReturn(s.Body, errname) && s.Else == nil {
-				if s.Init == nil && isErrAssign(p, errname) {
-					count++
-					if *list {
-						listPos(count, p)
-					}
-					if *rewrite {
-						b.List[i-1] = rewriteAssign(p, s.End())
-						b.List[i] = nil // remove `if`
-						dirty = true
-						*modified = true
-					}
-				} else if isErrAssign(s.Init, errname) {
-					count++
-					if *list {
-						listPos(count, s)
-					}
-					if *rewrite {
-						b.List[i] = rewriteAssign(s.Init, s.End())
-						*modified = true
-					}
-				}
+			if !isErrTest(s.Cond, &errname) {
+				break
+			}
+			count(IfErr, s)
+
+			// then block must be of the form: return ..., <errname>
+			if !isErrReturn(s.Body, errname) {
+				count(HasHandler, s.Body)
+				break
+			}
+			count(ReturnErr, s.Body)
+
+			// else block must be absent
+			if s.Else != nil {
+				count(HasElse, s.Else)
+				break
 			}
 
+			if s.Init == nil && isErrAssign(p, errname) {
+				count(TryCand, s)
+				if errname != "err" {
+					count(NonErrName, s.Cond)
+				}
+				if *rewrite {
+					b.List[i-1] = rewriteAssign(p, s.End())
+					b.List[i] = nil // remove `if`
+					dirty = true
+					*modified = true
+				}
+			} else if isErrAssign(s.Init, errname) {
+				count(TryCand, s)
+				if errname != "err" {
+					count(NonErrName, s.Cond)
+				}
+				if *rewrite {
+					b.List[i] = rewriteAssign(s.Init, s.End())
+					*modified = true
+				}
+			}
 		}
 		p = s
 	}
@@ -89,12 +106,6 @@ func tryBlock(b *ast.BlockStmt, modified *bool) {
 		}
 		b.List = b.List[:i]
 	}
-}
-
-// listPos prints the position of statement s, numbered by n.
-func listPos(n int, s ast.Stmt) {
-	pos := fset.Position(s.Pos())
-	fmt.Printf("%5d  %s:%d\n", n, pos.Filename, pos.Line)
 }
 
 // rewriteAssign assumes that s is an assignment that is a potential candidate

@@ -2,11 +2,11 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// tryhard is a very basic tool to list and rewrite `try` candidate statements.
+// `tryhard` is a simple tool to list and rewrite `try` candidate statements.
 // It operates on a file-by-file basis and does not type-check the code;
 // potential statements are recognized and rewritten purely based on pattern
-// matching, with the very real possibility of false positives. Use utmost
-// caution when using the rewrite feature (-r flag) and have a backup as needed.
+// matching, with the very real (but small) possibility of false positives. Use
+// caution when using the rewrite feature (`-r` flag) and have a backup as needed.
 //
 // Given a file, it operates on that file; given a directory, it operates on all
 // .go files in that directory, recursively. Files starting with a period are ignored.
@@ -24,14 +24,16 @@
 //	}
 //
 // or an `if` statement with an init expression matching the above assignment. The
-// error variable <err> must be called "err", unless specified otherwise with the
-// -err flag; the variable may or may not be of type `error` or correspond to the
+// error variable <err> may have any name, unless specified explicitly with the
+// `-err` flag; the variable may or may not be of type `error` or correspond to the
 // result error. The return statement must contain one or more return expressions,
 // with all but the last one denoting a zero value of sorts (a zero number literal,
 // an empty string, an empty composite literal, etc.). The last result must be the
 // variable <err>.
 //
-// CAUTION: If the rewrite flag (-r) is specified, the file is updated in place!
+// Unless no files were found, `tryhard` reports various counts at the end of its run.
+//
+// CAUTION: If the rewrite flag (`-r`) is specified, the file is updated in place!
 //          Make sure you can revert to the original.
 //
 // Function literals (closures) are currently ignored.
@@ -46,8 +48,6 @@
 //		rewrite potential `try` candidate statements to use `try`
 //	-err
 //		name of error variable; using "" permits any name
-//
-// If no -l is provided, tryhard reports the number of potential candidates found.
 package main
 
 import (
@@ -71,12 +71,13 @@ var (
 	rewrite = flag.Bool("r", false, "rewrite potential `try` candidate statements to use `try`")
 
 	// customization
-	varname = flag.String("err", "err", `name of error variable; using "" permits any name`)
+	varname = flag.String("err", "", `name of error variable; using "" permits any name`)
 )
 
 var (
-	fset     = token.NewFileSet()
-	exitCode int
+	fset      = token.NewFileSet()
+	exitCode  int
+	fileCount int
 )
 
 func report(err error) {
@@ -107,8 +108,11 @@ func main() {
 		}
 	}
 
-	if !*list {
-		fmt.Println(count)
+	if fileCount > 0 {
+		if *list {
+			reportPositions()
+		}
+		reportCounts()
 	}
 
 	os.Exit(exitCode)
@@ -121,6 +125,8 @@ func isGoFile(f os.FileInfo) bool {
 }
 
 func processFile(filename string) error {
+	fileCount++
+
 	var perm os.FileMode = 0644
 	f, err := os.Open(filename)
 	if err != nil {
