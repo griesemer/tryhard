@@ -6,8 +6,11 @@ potential statements are recognized and rewritten purely based on pattern
 matching, with the very real (but small) possibility of false positives. Use
 caution when using the rewrite feature (`-r` flag) and have a backup as needed.
 
-Given a file, it operates on that file; given a directory, it operates on all
-`.go` files in that directory, recursively. Files starting with a period are ignored.
+The command accepts a list of files or directories which it processes in the order
+they are provided. Given a file, it operates on that file no matter the file path.
+Given a directory, it operates on all `.go` files in that directory, recursively.
+Files starting with a period are ignored. Files may be explicitly ignored with
+the `-ignore` flag.
 
 `tryhard` considers each top-level function with a last result of named type `error`,
 which may or may not be the predefined type `error`. Inside these functions `tryhard`
@@ -52,5 +55,7 @@ The flags are:
 -r
 	rewrite potential `try` candidate statements to use `try`
 -err
-	name of error variable; using "" permits any name (default "")
+	name of error variable; using "" permits any name (default `""`)
+-ignore string
+    	ignore files with paths matching this (regexp) pattern (default `"vendor"`)
 ```
