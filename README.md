@@ -3,8 +3,11 @@
 `tryhard` is a simple tool to list and rewrite `try` candidate statements.
 It operates on a file-by-file basis and does not type-check the code;
 potential statements are recognized and rewritten purely based on pattern
-matching, with the very real (but small) possibility of false positives. Use
-caution when using the rewrite feature (`-r` flag) and have a backup as needed.
+matching. `tryhard` may report (a usually very small number of) false positives;
+the likelyhood for false positives may be lowered by providing the flag `-err="err"`.
+It also undercounts `try` candidates because `tryhard` does not recognize
+opportunities for shared, deferred handlers.
+Use caution when using the rewrite feature (`-r` flag) and have a backup as needed.
 
 The command accepts a list of files or directories which it processes in the order
 they are provided. Given a file, it operates on that file no matter the file path.

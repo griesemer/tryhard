@@ -30,15 +30,15 @@ var kindInfo = [numKinds]struct {
 	report bool   // if set, calling count() records position information which is reported at the end
 	desc   string // description
 }{
-	Func:       {false, "function declarations"},
-	FuncError:  {false, "functions returning an error"},
+	Func:       {false, "func declarations"},
+	FuncError:  {false, "func declarations returning an error"},
 	Stmt:       {false, "statements"},
 	If:         {false, "if statements"},
 	IfErr:      {false, "if <err> != nil statements"},
 	NonErrName: {true, `<err> name is different from "err"`},
 	ReturnErr:  {false, "return ..., <err> blocks in if <err> != nil statements"},
-	HasHandler: {true, "more complex error handler in if <err> != nil statements; prevent use of try"},
-	HasElse:    {true, "non-empty else blocks in if <err> != nil statements; prevent use of try"},
+	HasHandler: {true, "complex error handler in if <err> != nil statements; cannot use try"},
+	HasElse:    {true, "non-empty else blocks in if <err> != nil statements; cannot use try"},
 	TryCand:    {true, "try candidates"},
 }
 
@@ -76,7 +76,7 @@ func reportCount(k, ofk Kind) {
 	}
 	help := ""
 	if !*list && kindInfo[k].report {
-		help = " (use -l flag to list file positions)"
+		help = " (-l flag lists details)"
 	}
 	fmt.Printf("% 7d (%5.1f%% of % 7d) %s%s\n", x, p, total, kindInfo[k].desc, help)
 }
