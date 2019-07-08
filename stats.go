@@ -18,29 +18,32 @@ const (
 	Stmt
 	If
 	IfErr
+	TryCand
 	NonErrName
-	ReturnErr
+
+	// non-try candidates
 	ReturnExpr
 	SingleStmt
 	ComplexBlock
 	HasElse
-	TryCand
+
 	numKinds = iota
 )
 
 var kindDesc = [numKinds]string{
-	Func:         "func declarations",
-	FuncError:    "func declarations returning an error",
-	Stmt:         "statements",
-	If:           "if statements",
-	IfErr:        "if <err> != nil statements",
-	NonErrName:   `<err> name is different from "err"`,
-	ReturnErr:    "{ return ... zero values ..., <err> } in if <err> != nil statements",
-	ReturnExpr:   "{ return ... zero values ..., expr } in if <err> != nil statements",
-	SingleStmt:   "single statement then branch in if <err> != nil statements",
-	ComplexBlock: "complex then branch in if <err> != nil statements; cannot use try",
-	HasElse:      "non-empty else branch in if <err> != nil statements; cannot use try",
-	TryCand:      "try candidates",
+	Func:       "func declarations",
+	FuncError:  "func declarations returning an error",
+	Stmt:       "statements",
+	If:         "if statements",
+	IfErr:      "if <err> != nil statements",
+	TryCand:    "try candidates",
+	NonErrName: `<err> name is different from "err"`,
+
+	// non-try candidates
+	ReturnExpr:   "{ return ... zero values ..., expr }",
+	SingleStmt:   "single statement then branch",
+	ComplexBlock: "complex then branch; cannot use try",
+	HasElse:      "non-empty else branch; cannot use try",
 }
 
 var counts [numKinds]int
@@ -59,19 +62,24 @@ func count(k Kind, n ast.Node) {
 }
 
 func reportCounts() {
-	fmt.Printf("--- stats ---\n")
+	fmt.Println("--- stats ---")
 	reportCount(Func, Func)
 	reportCount(FuncError, Func)
 	reportCount(Stmt, Stmt)
 	reportCount(If, Stmt)
 	reportCount(IfErr, If)
+	reportCount(TryCand, IfErr)
 	reportCount(NonErrName, IfErr)
-	reportCount(ReturnErr, IfErr)
+
+	help := ""
+	if !*list {
+		help = " (-l flag lists file positions)"
+	}
+	fmt.Printf("--- non-try candidates%s ---\n", help)
 	reportCount(ReturnExpr, IfErr)
 	reportCount(SingleStmt, IfErr)
 	reportCount(ComplexBlock, IfErr)
 	reportCount(HasElse, IfErr)
-	reportCount(TryCand, IfErr)
 }
 
 func reportCount(k, ofk Kind) {
@@ -82,11 +90,7 @@ func reportCount(k, ofk Kind) {
 	if total != 0 {
 		p = float64(x) * 100 / float64(total)
 	}
-	help := ""
-	if !*list && len(posLists[k]) != 0 {
-		help = " (-l flag lists details)"
-	}
-	fmt.Printf("% 7d (%5.1f%% of % 7d) %s%s\n", x, p, total, kindDesc[k], help)
+	fmt.Printf("% 7d (%5.1f%% of % 7d) %s\n", x, p, total, kindDesc[k])
 }
 
 func reportPositions() {

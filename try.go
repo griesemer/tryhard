@@ -51,39 +51,19 @@ func tryBlock(b *ast.BlockStmt, modified *bool) {
 				tryBlock(s, modified)
 			}
 
-			// condition must be of the form: <errname> != nil
+			// condition must be of the form: <err> != nil
+			// where <err> stands for the error variable name
 			errname := *varname
 			if !isErrTest(s.Cond, &errname) {
 				break
 			}
 			count(IfErr, nil)
 
-			// then block must be of the form: return ... zero values ..., last (or just: return)
-			ok, last := isReturn(s.Body)
-			if !ok {
-				// distinguish between single-statement and more complex then blocks
-				k := SingleStmt
-				if len(s.Body.List) > 1 {
-					k = ComplexBlock
-				}
-				count(k, s.Body)
-				break
-			}
-
-			// last must be <err>
-			if last != nil && !isName(last, errname) {
-				count(ReturnExpr, s.Body)
-				break
-			}
-			count(ReturnErr, nil)
-
-			// else block must be absent
-			if s.Else != nil {
-				count(HasElse, s.Else)
-				break
-			}
-
-			if s.Init == nil && isErrAssign(p, errname) {
+			if s.Init == nil && isErrAssign(p, errname) && isTryHandler(s, errname) {
+				// ..., <err> := <expr>
+				// if <err> != nil {
+				//         return ... zeroes ..., <err>
+				// }
 				count(TryCand, s)
 				if errname != "err" {
 					count(NonErrName, s.Cond)
@@ -94,7 +74,10 @@ func tryBlock(b *ast.BlockStmt, modified *bool) {
 					dirty = true
 					*modified = true
 				}
-			} else if isErrAssign(s.Init, errname) {
+			} else if isErrAssign(s.Init, errname) && isTryHandler(s, errname) {
+				// if ..., <err> := <expr>; <err> != nil {
+				//         return ... zeroes ..., <err>
+				// }
 				count(TryCand, s)
 				if errname != "err" {
 					count(NonErrName, s.Cond)
@@ -118,6 +101,36 @@ func tryBlock(b *ast.BlockStmt, modified *bool) {
 		}
 		b.List = b.List[:i]
 	}
+}
+
+func isTryHandler(s *ast.IfStmt, errname string) bool {
+	ok := true
+
+	// then block must be of the form: return ... zero values ..., last (or just: return)
+	isRet, last := isReturn(s.Body)
+	if !isRet {
+		ok = false
+		// distinguish between single-statement and more complex then blocks
+		k := SingleStmt
+		if len(s.Body.List) > 1 {
+			k = ComplexBlock
+		}
+		count(k, s.Body)
+	}
+
+	// last must be <err>, if present
+	if last != nil && !isName(last, errname) {
+		ok = false
+		count(ReturnExpr, s.Body)
+	}
+
+	// else block must be absent
+	if s.Else != nil {
+		ok = false
+		count(HasElse, s.Else)
+	}
+
+	return ok
 }
 
 // rewriteAssign assumes that s is an assignment that is a potential candidate
