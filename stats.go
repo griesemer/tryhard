@@ -20,7 +20,8 @@ const (
 	IfErr
 	NonErrName
 	ReturnErr
-	HasHandler
+	ReturnExpr
+	ComplexBlock
 	HasElse
 	TryCand
 	numKinds = iota
@@ -30,16 +31,17 @@ var kindInfo = [numKinds]struct {
 	report bool   // if set, calling count() records position information which is reported at the end
 	desc   string // description
 }{
-	Func:       {false, "func declarations"},
-	FuncError:  {false, "func declarations returning an error"},
-	Stmt:       {false, "statements"},
-	If:         {false, "if statements"},
-	IfErr:      {false, "if <err> != nil statements"},
-	NonErrName: {true, `<err> name is different from "err"`},
-	ReturnErr:  {false, "return ..., <err> blocks in if <err> != nil statements"},
-	HasHandler: {true, "complex error handler in if <err> != nil statements; cannot use try"},
-	HasElse:    {true, "non-empty else blocks in if <err> != nil statements; cannot use try"},
-	TryCand:    {true, "try candidates"},
+	Func:         {false, "func declarations"},
+	FuncError:    {false, "func declarations returning an error"},
+	Stmt:         {false, "statements"},
+	If:           {false, "if statements"},
+	IfErr:        {false, "if <err> != nil statements"},
+	NonErrName:   {true, `<err> name is different from "err"`},
+	ReturnErr:    {false, "{ return ..., <err> } in if <err> != nil statements"},
+	ReturnExpr:   {true, "{ return ..., expr } in if <err> != nil statements"},
+	ComplexBlock: {true, "complex handler in if <err> != nil statements; cannot use try"},
+	HasElse:      {true, "non-empty else in if <err> != nil statements; cannot use try"},
+	TryCand:      {true, "try candidates"},
 }
 
 var counts [numKinds]int
@@ -61,7 +63,8 @@ func reportCounts() {
 	reportCount(IfErr, If)
 	reportCount(NonErrName, IfErr)
 	reportCount(ReturnErr, IfErr)
-	reportCount(HasHandler, IfErr)
+	reportCount(ReturnExpr, IfErr)
+	reportCount(ComplexBlock, IfErr)
 	reportCount(HasElse, IfErr)
 	reportCount(TryCand, IfErr)
 }

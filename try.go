@@ -58,9 +58,16 @@ func tryBlock(b *ast.BlockStmt, modified *bool) {
 			}
 			count(IfErr, s)
 
-			// then block must be of the form: return ..., <errname>
-			if !isErrReturn(s.Body, errname) {
-				count(HasHandler, s.Body)
+			// then block must be of the form: return ..., last (or just: return)
+			ok, last := isReturn(s.Body)
+			if !ok {
+				count(ComplexBlock, s.Body)
+				break
+			}
+
+			// last must be <err>
+			if last != nil && !isName(last, errname) {
+				count(ReturnExpr, s.Body)
 				break
 			}
 			count(ReturnErr, s.Body)
@@ -176,29 +183,27 @@ func isErrTest(x ast.Expr, errname *string) bool {
 	return false
 }
 
-// isErrReturn reports whether b contains a single return statement
-// that is either empty, or reports all zero values followed by a final
-// variable called errname.
-func isErrReturn(b *ast.BlockStmt, errname string) bool {
+// reports whether b contains a single return statement
+// that is either naked, or that returns all zero values
+// followed by a last expression (which is not further
+// restricted); last is nil for naked returns.
+func isReturn(b *ast.BlockStmt) (ok bool, last ast.Expr) {
 	if len(b.List) != 1 {
-		return false
+		return
 	}
-	ret, ok := b.List[0].(*ast.ReturnStmt)
-	if !ok {
-		return false
+	ret, _ := b.List[0].(*ast.ReturnStmt)
+	if ret == nil {
+		return
 	}
-	for i, x := range ret.Results {
-		if i < len(ret.Results)-1 {
+	if n := len(ret.Results); n > 0 {
+		for _, x := range ret.Results[:n-1] {
 			if !isZero(x) {
-				return false
-			}
-		} else {
-			if !isName(x, errname) {
-				return false
+				return
 			}
 		}
+		return true, ret.Results[n-1]
 	}
-	return true
+	return true, nil
 }
 
 // hasErrorResult reports whether sig has a final result with type name "error".
