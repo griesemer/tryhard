@@ -16,9 +16,9 @@ import (
 func tryFile(f *ast.File, modified *bool) {
 	for _, d := range f.Decls {
 		if f, ok := d.(*ast.FuncDecl); ok {
-			count(Func, f)
+			count(Func, nil)
 			if hasErrorResult(f.Type) && f.Body != nil {
-				count(FuncError, f)
+				count(FuncError, nil)
 				tryBlock(f.Body, modified)
 			}
 		}
@@ -30,7 +30,7 @@ func tryBlock(b *ast.BlockStmt, modified *bool) {
 	dirty := false // if set, b.List contains nil entries
 	var p ast.Stmt // previous statement
 	for i, s := range b.List {
-		count(Stmt, s)
+		count(Stmt, nil)
 		switch s := s.(type) {
 		case *ast.BlockStmt:
 			tryBlock(s, modified)
@@ -45,7 +45,7 @@ func tryBlock(b *ast.BlockStmt, modified *bool) {
 		case *ast.TypeSwitchStmt:
 			tryBlock(s.Body, modified)
 		case *ast.IfStmt:
-			count(If, s)
+			count(If, nil)
 			tryBlock(s.Body, modified)
 			if s, ok := s.Else.(*ast.BlockStmt); ok {
 				tryBlock(s, modified)
@@ -56,7 +56,7 @@ func tryBlock(b *ast.BlockStmt, modified *bool) {
 			if !isErrTest(s.Cond, &errname) {
 				break
 			}
-			count(IfErr, s)
+			count(IfErr, nil)
 
 			// then block must be of the form: return ..., last (or just: return)
 			ok, last := isReturn(s.Body)
@@ -70,7 +70,7 @@ func tryBlock(b *ast.BlockStmt, modified *bool) {
 				count(ReturnExpr, s.Body)
 				break
 			}
-			count(ReturnErr, s.Body)
+			count(ReturnErr, nil)
 
 			// else block must be absent
 			if s.Else != nil {

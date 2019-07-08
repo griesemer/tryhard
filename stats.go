@@ -27,29 +27,31 @@ const (
 	numKinds = iota
 )
 
-var kindInfo = [numKinds]struct {
-	report bool   // if set, calling count() records position information which is reported at the end
-	desc   string // description
-}{
-	Func:         {false, "func declarations"},
-	FuncError:    {false, "func declarations returning an error"},
-	Stmt:         {false, "statements"},
-	If:           {false, "if statements"},
-	IfErr:        {false, "if <err> != nil statements"},
-	NonErrName:   {true, `<err> name is different from "err"`},
-	ReturnErr:    {false, "{ return ..., <err> } in if <err> != nil statements"},
-	ReturnExpr:   {true, "{ return ..., expr } in if <err> != nil statements"},
-	ComplexBlock: {true, "complex handler in if <err> != nil statements; cannot use try"},
-	HasElse:      {true, "non-empty else in if <err> != nil statements; cannot use try"},
-	TryCand:      {true, "try candidates"},
+var kindDesc = [numKinds]string{
+	Func:         "func declarations",
+	FuncError:    "func declarations returning an error",
+	Stmt:         "statements",
+	If:           "if statements",
+	IfErr:        "if <err> != nil statements",
+	NonErrName:   `<err> name is different from "err"`,
+	ReturnErr:    "{ return ..., <err> } in if <err> != nil statements",
+	ReturnExpr:   "{ return ..., expr } in if <err> != nil statements",
+	ComplexBlock: "complex handler in if <err> != nil statements; cannot use try",
+	HasElse:      "non-empty else in if <err> != nil statements; cannot use try",
+	TryCand:      "try candidates",
 }
 
 var counts [numKinds]int
 var posLists [numKinds][]token.Pos
 
+// count adds 1 to the number of nodes categorized as k.
+// Counts are reported with reportCounts.
+// If n != nil, count appends that node's position to the
+// list of positions categorized as k. Collected positions
+// are reported with reportPositions.
 func count(k Kind, n ast.Node) {
 	counts[k]++
-	if kindInfo[k].report {
+	if n != nil {
 		posLists[k] = append(posLists[k], n.Pos())
 	}
 }
@@ -78,10 +80,10 @@ func reportCount(k, ofk Kind) {
 		p = float64(x) * 100 / float64(total)
 	}
 	help := ""
-	if !*list && kindInfo[k].report {
+	if !*list && len(posLists[k]) != 0 {
 		help = " (-l flag lists details)"
 	}
-	fmt.Printf("% 7d (%5.1f%% of % 7d) %s%s\n", x, p, total, kindInfo[k].desc, help)
+	fmt.Printf("% 7d (%5.1f%% of % 7d) %s%s\n", x, p, total, kindDesc[k], help)
 }
 
 func reportPositions() {
@@ -89,7 +91,7 @@ func reportPositions() {
 		if len(list) == 0 {
 			continue
 		}
-		fmt.Printf("--- %s ---\n", kindInfo[k].desc)
+		fmt.Printf("--- %s ---\n", kindDesc[k])
 		for i, pos := range list {
 			p := fset.Position(pos)
 			fmt.Printf("% 7d  %s:%d\n", i+1, p.Filename, p.Line)
