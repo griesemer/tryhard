@@ -58,10 +58,15 @@ func tryBlock(b *ast.BlockStmt, modified *bool) {
 			}
 			count(IfErr, nil)
 
-			// then block must be of the form: return ..., last (or just: return)
+			// then block must be of the form: return ... zero values ..., last (or just: return)
 			ok, last := isReturn(s.Body)
 			if !ok {
-				count(ComplexBlock, s.Body)
+				// distinguish between single-statement and more complex then blocks
+				k := SingleStmt
+				if len(s.Body.List) > 1 {
+					k = ComplexBlock
+				}
+				count(k, s.Body)
 				break
 			}
 

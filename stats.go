@@ -21,6 +21,7 @@ const (
 	NonErrName
 	ReturnErr
 	ReturnExpr
+	SingleStmt
 	ComplexBlock
 	HasElse
 	TryCand
@@ -34,10 +35,11 @@ var kindDesc = [numKinds]string{
 	If:           "if statements",
 	IfErr:        "if <err> != nil statements",
 	NonErrName:   `<err> name is different from "err"`,
-	ReturnErr:    "{ return ..., <err> } in if <err> != nil statements",
-	ReturnExpr:   "{ return ..., expr } in if <err> != nil statements",
-	ComplexBlock: "complex handler in if <err> != nil statements; cannot use try",
-	HasElse:      "non-empty else in if <err> != nil statements; cannot use try",
+	ReturnErr:    "{ return ... zero values ..., <err> } in if <err> != nil statements",
+	ReturnExpr:   "{ return ... zero values ..., expr } in if <err> != nil statements",
+	SingleStmt:   "single statement then branch in if <err> != nil statements",
+	ComplexBlock: "complex then branch in if <err> != nil statements; cannot use try",
+	HasElse:      "non-empty else branch in if <err> != nil statements; cannot use try",
 	TryCand:      "try candidates",
 }
 
@@ -66,6 +68,7 @@ func reportCounts() {
 	reportCount(NonErrName, IfErr)
 	reportCount(ReturnErr, IfErr)
 	reportCount(ReturnExpr, IfErr)
+	reportCount(SingleStmt, IfErr)
 	reportCount(ComplexBlock, IfErr)
 	reportCount(HasElse, IfErr)
 	reportCount(TryCand, IfErr)
