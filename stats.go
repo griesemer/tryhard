@@ -31,9 +31,9 @@ const (
 )
 
 var kindDesc = [numKinds]string{
-	Func:       "func declarations",
-	FuncError:  "func declarations returning an error",
-	Stmt:       "statements",
+	Func:       "functions (function literals are ignored)",
+	FuncError:  "functions returning an error",
+	Stmt:       "statements in functions returning an error",
 	If:         "if statements",
 	IfErr:      "if <err> != nil statements",
 	TryCand:    "try candidates",
