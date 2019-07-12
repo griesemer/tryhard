@@ -10,6 +10,11 @@ import (
 	"strconv"
 )
 
+type funcInfo struct {
+	modified   bool       // indicates whether the function body was modified
+	sharedLast []ast.Expr // if <err> != nil { return ... zero ..., last } always the same; valid if != nil
+}
+
 // tryFile identifies statements in f that are potential candidates for `try`,
 // lists their positions (-l flag), or rewrites them in place using `try` (-r flag)
 // and sets *modified to true.
@@ -19,36 +24,51 @@ func tryFile(f *ast.File, modified *bool) {
 			count(Func, nil)
 			if hasErrorResult(f.Type) && f.Body != nil {
 				count(FuncError, nil)
-				tryBlock(f.Body, modified)
+
+				fi := funcInfo{false, []ast.Expr{} /* mark as valid but empty */}
+				fi.tryBlock(f.Body)
+				if fi.modified {
+					*modified = true
+				}
+
+				if len(fi.sharedLast) > 1 {
+					// Return statements in `if <err> != nil` statements for
+					// `try` candidates share the same last expression. This
+					// is an indicator that deferred handling of that expression
+					// may be possible if there are no other error returns.
+					for _, last := range fi.sharedLast {
+						count(SharedLast, last)
+					}
+				}
 			}
 		}
 	}
 }
 
 // tryBlock is like tryFile but operates on a block b.
-func tryBlock(b *ast.BlockStmt, modified *bool) {
+func (fi *funcInfo) tryBlock(b *ast.BlockStmt) {
 	dirty := false // if set, b.List contains nil entries
 	var p ast.Stmt // previous statement
 	for i, s := range b.List {
 		count(Stmt, nil)
 		switch s := s.(type) {
 		case *ast.BlockStmt:
-			tryBlock(s, modified)
+			fi.tryBlock(s)
 		case *ast.ForStmt:
-			tryBlock(s.Body, modified)
+			fi.tryBlock(s.Body)
 		case *ast.RangeStmt:
-			tryBlock(s.Body, modified)
+			fi.tryBlock(s.Body)
 		case *ast.SelectStmt:
-			tryBlock(s.Body, modified)
+			fi.tryBlock(s.Body)
 		case *ast.SwitchStmt:
-			tryBlock(s.Body, modified)
+			fi.tryBlock(s.Body)
 		case *ast.TypeSwitchStmt:
-			tryBlock(s.Body, modified)
+			fi.tryBlock(s.Body)
 		case *ast.IfStmt:
 			count(If, nil)
-			tryBlock(s.Body, modified)
+			fi.tryBlock(s.Body)
 			if s, ok := s.Else.(*ast.BlockStmt); ok {
-				tryBlock(s, modified)
+				fi.tryBlock(s)
 			}
 
 			// condition must be of the form: <err> != nil
@@ -59,7 +79,7 @@ func tryBlock(b *ast.BlockStmt, modified *bool) {
 			}
 			count(IfErr, nil)
 
-			if s.Init == nil && isErrAssign(p, errname) && isTryHandler(s, errname) {
+			if s.Init == nil && isErrAssign(p, errname) && fi.isTryHandler(s, errname) {
 				// ..., <err> := <expr>
 				// if <err> != nil {
 				//         return ... zeroes ..., <err>
@@ -72,9 +92,9 @@ func tryBlock(b *ast.BlockStmt, modified *bool) {
 					b.List[i-1] = rewriteAssign(p, s.End())
 					b.List[i] = nil // remove `if`
 					dirty = true
-					*modified = true
+					fi.modified = true
 				}
-			} else if isErrAssign(s.Init, errname) && isTryHandler(s, errname) {
+			} else if isErrAssign(s.Init, errname) && fi.isTryHandler(s, errname) {
 				// if ..., <err> := <expr>; <err> != nil {
 				//         return ... zeroes ..., <err>
 				// }
@@ -84,7 +104,7 @@ func tryBlock(b *ast.BlockStmt, modified *bool) {
 				}
 				if *rewrite {
 					b.List[i] = rewriteAssign(s.Init, s.End())
-					*modified = true
+					fi.modified = true
 				}
 			}
 		}
@@ -103,7 +123,7 @@ func tryBlock(b *ast.BlockStmt, modified *bool) {
 	}
 }
 
-func isTryHandler(s *ast.IfStmt, errname string) bool {
+func (fi *funcInfo) isTryHandler(s *ast.IfStmt, errname string) bool {
 	ok := true
 
 	// then block must be of the form: return ... zero values ..., last (or just: return)
@@ -122,6 +142,15 @@ func isTryHandler(s *ast.IfStmt, errname string) bool {
 	if last != nil && !isName(last, errname) {
 		ok = false
 		count(ReturnExpr, s.Body)
+		if fi.sharedLast != nil {
+			if len(fi.sharedLast) == 0 || equal(last, fi.sharedLast[0]) {
+				fi.sharedLast = append(fi.sharedLast, last)
+			} else {
+				fi.sharedLast = nil // invalidate
+			}
+		}
+	} else {
+		fi.sharedLast = nil // invalidate
 	}
 
 	// else block must be absent

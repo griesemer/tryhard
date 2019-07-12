@@ -23,6 +23,7 @@ const (
 
 	// non-try candidates
 	ReturnExpr
+	SharedLast
 	SingleStmt
 	ComplexBlock
 	HasElse
@@ -41,6 +42,7 @@ var kindDesc = [numKinds]string{
 
 	// non-try candidates
 	ReturnExpr:   "{ return ... zero values ..., expr }",
+	SharedLast:   "possibly try/defer candidate",
 	SingleStmt:   "single statement then branch",
 	ComplexBlock: "complex then branch; cannot use try",
 	HasElse:      "non-empty else branch; cannot use try",
@@ -77,6 +79,7 @@ func reportCounts() {
 	}
 	fmt.Printf("--- non-try candidates%s ---\n", help)
 	reportCount(ReturnExpr, IfErr)
+	reportCount(SharedLast, ReturnExpr)
 	reportCount(SingleStmt, IfErr)
 	reportCount(ComplexBlock, IfErr)
 	reportCount(HasElse, IfErr)
